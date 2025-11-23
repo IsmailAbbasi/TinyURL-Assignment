@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 // GET /api/links/:code - Get stats for one code
 export async function GET(request, { params }) {
   try {
-    const { code } = params;
+    // ✅ FIX: Await params in Next.js 15+
+    const { code } = await params;
     
     const result = await query(
       'SELECT * FROM links WHERE code = $1',
@@ -31,7 +32,8 @@ export async function GET(request, { params }) {
 // DELETE /api/links/:code - Delete link
 export async function DELETE(request, { params }) {
   try {
-    const { code } = params;
+    // ✅ FIX: Await params in Next.js 15+
+    const { code } = await params;
     
     const result = await query(
       'DELETE FROM links WHERE code = $1 RETURNING *',

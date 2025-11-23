@@ -65,13 +65,11 @@ export default function Home() {
         return;
       }
 
-      // Success
       setSuccessMessage(`Link created successfully! Code: ${data.code}`);
       setFormData({ target_url: '', code: '' });
       setShowForm(false);
       fetchLinks();
       
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (error) {
       setFormError('Failed to create link');
@@ -103,19 +101,50 @@ export default function Home() {
   };
 
   const copyToClipboard = (code) => {
-    const url = `${window.location.origin}/${code}`;
-    navigator.clipboard.writeText(url);
-    setSuccessMessage('Link copied to clipboard!');
-    setTimeout(() => setSuccessMessage(''), 2000);
+    const fullUrl = `${window.location.origin}/${code}`;
+    
+    navigator.clipboard.writeText(fullUrl).then(() => {
+      setSuccessMessage(`Link copied: ${fullUrl}`);
+      setTimeout(() => setSuccessMessage(''), 2000);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      alert('Failed to copy link');
+    });
+  };
+
+  const visitLink = (code) => {
+    window.open(`/${code}`, '_blank');
   };
 
   const truncateUrl = (url, maxLength = 50) => {
     return url.length > maxLength ? url.substring(0, maxLength) + '...' : url;
   };
 
+  // ✅ FIXED: Properly convert to IST
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleString();
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Convert to IST (UTC+5:30)
+      const options = {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      };
+      
+      const istDate = date.toLocaleString('en-IN', options);
+      return `${istDate} IST`;
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return 'Invalid date';
+    }
   };
 
   return (
@@ -308,10 +337,17 @@ export default function Home() {
                           </code>
                           <button
                             onClick={() => copyToClipboard(link.code)}
-                            className="text-gray-400 hover:text-gray-600"
-                            title="Copy link"
+                            className="text-gray-400 hover:text-gray-600 text-lg"
+                            title="Copy full link"
                           >
                             📋
+                          </button>
+                          <button
+                            onClick={() => visitLink(link.code)}
+                            className="text-green-500 hover:text-green-700 text-lg"
+                            title="Visit link (counts as click)"
+                          >
+                            🔗
                           </button>
                         </div>
                       </td>

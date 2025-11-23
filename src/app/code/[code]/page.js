@@ -6,19 +6,23 @@ import { useParams } from 'next/navigation';
 
 export default function StatsPage() {
   const params = useParams();
-  const code = params.code;
+  const code = params?.code;
   
   const [link, setLink] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchLinkStats();
+    if (code) {
+      fetchLinkStats();
+    }
   }, [code]);
 
   const fetchLinkStats = async () => {
     try {
       setLoading(true);
+      setError('');
+      
       const res = await fetch(`/api/links/${code}`);
       
       if (!res.ok) {
@@ -42,10 +46,47 @@ export default function StatsPage() {
     alert('Link copied to clipboard!');
   };
 
+  // ✅ FIXED: Properly convert to IST
   const formatDate = (dateString) => {
     if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleString();
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Method 1: Using toLocaleString with Asia/Kolkata timezone
+      const options = {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      };
+      
+      const istDate = date.toLocaleString('en-IN', options);
+      
+      // Add IST label
+      return `${istDate} IST`;
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return 'Invalid date';
+    }
   };
+
+  if (!code) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500">Invalid code</p>
+          <Link href="/" className="text-blue-600 hover:text-blue-800 mt-4 inline-block">
+            Go to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -97,11 +138,14 @@ export default function StatsPage() {
                     <p className="text-lg font-mono text-gray-900">{link.code}</p>
                     <button
                       onClick={copyToClipboard}
-                      className="text-blue-600 hover:text-blue-800 text-sm"
+                      className="bg-blue-100 text-blue-600 px-3 py-1 rounded hover:bg-blue-200 text-sm"
                     >
-                      Copy Link
+                      📋 Copy Full Link
                     </button>
                   </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {typeof window !== 'undefined' && `${window.location.origin}/${link.code}`}
+                  </p>
                 </div>
 
                 <div>
