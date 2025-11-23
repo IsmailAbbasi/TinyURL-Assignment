@@ -28,10 +28,26 @@ export default function Home() {
         : '/api/links';
       
       const res = await fetch(url);
+      
+      // ✅ Check if response is OK
+      if (!res.ok) {
+        console.error('Failed to fetch links:', res.status);
+        setLinks([]);
+        return;
+      }
+      
       const data = await res.json();
-      setLinks(data);
+      
+      // ✅ Ensure data is an array
+      if (Array.isArray(data)) {
+        setLinks(data);
+      } else {
+        console.error('Invalid response format:', data);
+        setLinks([]);
+      }
     } catch (error) {
       console.error('Error fetching links:', error);
+      setLinks([]);
     } finally {
       setLoading(false);
     }

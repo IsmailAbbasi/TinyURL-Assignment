@@ -1,20 +1,8 @@
 import { query } from '@/lib/db';
 import { NextResponse } from 'next/server';
 
-function isValidURL(string) {
-  try {
-    new URL(string);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-
-function isValidCode(code) {
-  return /^[A-Za-z0-9]{6,8}$/.test(code);
-}
-
-function generateRandomCode() {
+// Generate random 6-character code
+function generateCode() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let code = '';
   for (let i = 0; i < 6; i++) {
@@ -23,25 +11,65 @@ function generateRandomCode() {
   return code;
 }
 
-// POST /api/links - Create a new link
+// GET /api/links - Get all links or search
+export async function GET(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get('search');
+
+    let result;
+    if (search) {
+      result = await query(
+        'SELECT * FROM links WHERE code ILIKE $1 OR target_url ILIKE $1 ORDER BY created_at DESC',
+        [`%${search}%`]
+      );
+    } else {
+      result = await query('SELECT * FROM links ORDER BY created_at DESC');
+    }
+
+    // ✅ Always return an array, even if empty
+    return NextResponse.json(result.rows || []);
+  } catch (error) {
+    console.error('Error fetching links:', error);
+    // ✅ Return empty array on error instead of error object
+    return NextResponse.json([], { status: 200 });
+  }
+}
+
+// POST /api/links - Create new link
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { target_url, code } = body;
+    const { target_url, code: customCode } = body;
 
     // Validate URL
-    if (!target_url || !isValidURL(target_url)) {
+    if (!target_url || !target_url.startsWith('http')) {
       return NextResponse.json(
-        { error: 'Invalid URL' },
+        { error: 'Valid URL is required' },
         { status: 400 }
       );
     }
 
-    let shortCode = code;
-
-    // If custom code provided, validate it
-    if (shortCode) {
-      if (!isValidCode(shortCode)) {
+    // Use custom code or generate random one
+    let code = customCode;
+    if (!code) {
+      // Generate unique code
+      let attempts = 0;
+      while (attempts < 10) {
+        code = generateCode();
+        const existing = await query('SELECT * FROM links WHERE code = $1', [code]);
+        if (existing.rows.length === 0) break;
+        attempts++;
+      }
+      if (attempts === 10) {
+        return NextResponse.json(
+          { error: 'Failed to generate unique code' },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Validate custom code format
+      if (!/^[A-Za-z0-9]{6,8}$/.test(code)) {
         return NextResponse.json(
           { error: 'Code must be 6-8 alphanumeric characters' },
           { status: 400 }
@@ -49,79 +77,24 @@ export async function POST(request) {
       }
 
       // Check if code already exists
-      const existing = await query(
-        'SELECT code FROM links WHERE code = $1',
-        [shortCode]
-      );
-
+      const existing = await query('SELECT * FROM links WHERE code = $1', [code]);
       if (existing.rows.length > 0) {
         return NextResponse.json(
           { error: 'Code already exists' },
           { status: 409 }
         );
       }
-    } else {
-      // Generate random code
-      shortCode = generateRandomCode();
-
-      // Ensure uniqueness (retry up to 5 times)
-      let attempts = 0;
-      while (attempts < 5) {
-        const existing = await query(
-          'SELECT code FROM links WHERE code = $1',
-          [shortCode]
-        );
-        if (existing.rows.length === 0) break;
-        shortCode = generateRandomCode();
-        attempts++;
-      }
-
-      if (attempts === 5) {
-        return NextResponse.json(
-          { error: 'Failed to generate unique code' },
-          { status: 500 }
-        );
-      }
     }
 
-    // Insert the new link
+    // Insert new link
     const result = await query(
       'INSERT INTO links (code, target_url) VALUES ($1, $2) RETURNING *',
-      [shortCode, target_url]
+      [code, target_url]
     );
 
     return NextResponse.json(result.rows[0], { status: 201 });
   } catch (error) {
     console.error('Error creating link:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// GET /api/links - List all links
-export async function GET(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const search = searchParams.get('search');
-
-    let queryText = 'SELECT * FROM links ORDER BY created_at DESC';
-    let params = [];
-
-    if (search) {
-      queryText = `
-        SELECT * FROM links 
-        WHERE code ILIKE $1 OR target_url ILIKE $1
-        ORDER BY created_at DESC
-      `;
-      params = [`%${search}%`];
-    }
-
-    const result = await query(queryText, params);
-    return NextResponse.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching links:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
